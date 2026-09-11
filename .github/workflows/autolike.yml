@@ -1,0 +1,25 @@
+name: Auto Like Automation
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # প্রতি ৬ ঘণ্টা পরপর অটোমেটিক চলবে
+  workflow_dispatch: # যাতে আপনি চাইলে ম্যানুয়ালি বাটন চেপেও টেস্ট করতে পারেন
+
+jobs:
+  run-like-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node.js-version: '20'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Execute Bot
+        run: node bot.js
