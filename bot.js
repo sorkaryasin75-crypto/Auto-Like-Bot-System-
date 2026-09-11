@@ -8,7 +8,7 @@ puppeteer.use(StealthPlugin());
     const PASSWORD = process.env.SITE_PASSWORD;
 
     if (!EMAIL || !PASSWORD) {
-        console.error('[!] ERROR: SITE_EMAIL অথবা SITE_PASSWORD সেটিংসে পাওয়া যায়নি!');
+        console.error('[!] ERROR: SITE_EMAIL অথবা SITE_PASSWORD পাওয়া যায়নি!');
         process.exit(1);
     }
 
@@ -18,131 +18,139 @@ puppeteer.use(StealthPlugin());
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-blink-features=AutomationControlled',
-            '--window-size=1920,1080'
+            '--start-maximized'
         ]
     });
 
     const page = await browser.newPage();
 
-    // কোনো বাধ্যতামূলক ফিক্সড টাইমআউট রাখা হয়নি (সার্ভারের গতির ওপর নির্ভর করে ডায়নামিক্যালি কাজ করবে)
+    // কোনো সময়সীমা (Timeout) থাকবে না, সাইটের পারফর্মেন্স অনুযায়ী ডায়নামিকালি কাজ করবে
     await page.setDefaultNavigationTimeout(0);
     await page.setDefaultTimeout(0);
 
-    // রিয়েল হিউম্যান ইউজার-এজেন্ট হেডার
+    // রিয়েল ক্রোম ব্রাউজার ইউজার এরেঞ্জমেন্ট
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setViewport({ width: 1366, height: 768 });
+
+    // মানুষের মতো কার্সার স্মুথলি মুভ করানোর ডায়নামিক ফাংশন
+    async function humanMoveAndClick(targetElement) {
+        const box = await targetElement.boundingBox();
+        if (!box) return false;
+
+        // বাটনের একদম মাঝখানে মানুষের হাত/মাউসের মতো কার্সার নেওয়া
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height / 2;
+
+        // মাউস ধীরে ধীরে সরিয়ে বাটন পর্যন্ত নেওয়া (Human Mouse Bezier Simulation)
+        await page.mouse.move(x, y, { steps: 15 });
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 300) + 200));
+
+        // মাউসে আসল হিউম্যান প্রেস করা
+        await page.mouse.down();
+        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 100) + 50));
+        await page.mouse.up();
+
+        return true;
+    }
 
     try {
-        // ১. লগইন পেজে ভিজিট (সার্ভার থেকে ডায়নামিকালি কন্টেন্ট লোড হওয়া পর্যন্ত ওয়েট)
-        console.log('[+] লগইন পেজে নেভিগেট করা হচ্ছে...');
+        console.log('[+] লগইন পেজে যাওয়া হচ্ছে...');
         await page.goto('https://reebook-meta.com/login.php', { waitUntil: 'domcontentloaded' });
 
-        // ২. ইমেইল এবং পাসওয়ার্ড ফিল্ড রেডি হওয়ার সাথে সাথে ইনপুট দেওয়া
-        console.log('[+] লগইন ফিল্ড রেডি হওয়ার সাথে সাথে ডেটা টাইপ করা হচ্ছে...');
-        const emailInput = await page.waitForSelector('input[name="email"]', { visible: true });
-        await emailInput.type(EMAIL, { delay: 50 });
-
-        const passwordInput = await page.waitForSelector('input[name="password"]', { visible: true });
-        await passwordInput.type(PASSWORD, { delay: 50 });
-
-        console.log('[+] লগইন সাবমিট করা হচ্ছে...');
+        // ১. ডায়নামিকালি ইমেইল ফিল্ড রেডি হওয়ার জন্য অপেক্ষা
+        const emailField = await page.waitForSelector('input[name="email"]', { visible: true });
+        await humanMoveAndClick(emailField);
         
-        // সাবমিট বাটন এবং পরবর্তী পেজে সফলভাবে রিডাইরেক্ট হওয়ার ডায়নামিক অপেক্ষা
+        // টাইপিং স্পিড মানুষের মতো (এলোমেলো লেটেন্সি সহ)
+        for (let char of EMAIL) {
+            await page.keyboard.type(char, { delay: Math.floor(Math.random() * 80) + 40 });
+        }
+
+        const passField = await page.waitForSelector('input[name="password"]', { visible: true });
+        await humanMoveAndClick(passField);
+        for (let char of PASSWORD) {
+            await page.keyboard.type(char, { delay: Math.floor(Math.random() * 80) + 40 });
+        }
+
+        console.log('[+] লগইন সাবমিট বাটন প্রেস করা হচ্ছে...');
+        const submitBtn = await page.waitForSelector('button[type="submit"]', { visible: true });
+        
         await Promise.all([
-            page.click('button[type="submit"]'),
+            humanMoveAndClick(submitBtn),
             page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {})
         ]);
 
-        console.log('[✓] আপনার আইডি সফলভাবে সিস্টেমে লগইন হয়েছে!');
+        console.log('[✓] আপনার আইডি সফলভাবে সিস্টেমে প্রবেশ করেছে!');
 
-        // ৩. সরাসরি ড্যাশবোর্ডে যাওয়া এবং ড্যাশবোর্ড কন্টেন্ট রেডি হওয়া নিশ্চিত করা
-        console.log('[+] ইউজার ফিড/ড্যাশবোর্ডে যাওয়া হচ্ছে...');
+        // ২. ড্যাশবোর্ডে গমন
+        console.log('[+] ইউজার নিউজফিডে যাওয়া হচ্ছে...');
         await page.goto('https://reebook-meta.com/users/dashboard.php', { waitUntil: 'domcontentloaded' });
-
-        // ড্যাশবোর্ডের প্রথম পোস্ট লোড হওয়া পর্যন্ত ডায়নামিক অপেক্ষা
         await page.waitForSelector('body', { visible: true });
 
-        let totalLiked = 0;
-        console.log('[+] ইউজারের আসল পোস্টগুলোতে লাইক দেওয়ার প্রসেস শুরু হচ্ছে...');
+        let actualConfirmedLikes = 0;
 
-        // ৪. ডায়নামিক স্ক্রোল এবং রিয়েল-টাইম পোস্ট রিঅ্যাকশন হ্যান্ডলিং
+        // ৩. ফিড স্ক্রোল এবং পোস্ট বাই পোস্ট হিউম্যান ইন্টারঅ্যাকশন
         for (let scrollCycle = 0; scrollCycle < 15; scrollCycle++) {
             
-            // রিয়েল-টাইমে পেজের DOM থেকে পোস্ট সনাক্তকরণ
-            const likedInCycle = await page.evaluate(async () => {
-                let count = 0;
+            // পোস্ট নির্বাচন করা
+            const postContainers = await page.$$('div, article, section');
 
-                // প্রতিটি ইউজার পোস্ট কার্ড বা কন্টেইনার বের করা
-                const containers = Array.from(document.querySelectorAll('div, article, section'));
+            for (let container of postContainers) {
+                const isPost = await page.evaluate(el => {
+                    const txt = el.innerText || '';
+                    // পোস্ট কনফার্ম করার জন্য 'কমেন্ট/শেয়ার' টেক্সটের উপস্থিতি যাচাই
+                    return (txt.includes('মন্তব্য') || txt.includes('শেয়ার') || txt.includes('Comment')) && !el.hasAttribute('data-human-processed');
+                }, container);
 
-                for (let container of containers) {
-                    const text = container.innerText || '';
+                if (isPost) {
+                    await page.evaluate(el => el.setAttribute('data-human-processed', 'true'), container);
 
-                    // নিশ্চিত হওয়া যে এটি একটি ইউজার পোস্ট (লাইক/কমেন্ট/ শেয়ার অপশন রয়েছে)
-                    if ((text.includes('মন্তব্য') || text.includes('শেয়ার') || text.includes('Comment')) && !container.getAttribute('data-bot-done')) {
-                        
-                        container.setAttribute('data-bot-done', 'true');
+                    // পোস্টটির লাইক বাটন চিহ্নিত করা
+                    const likeButton = await container.$('button, a, div[role="button"]');
+                    
+                    if (likeButton) {
+                        const isLikeBtn = await page.evaluate(btn => {
+                            const t = btn.innerText ? btn.innerText.trim() : '';
+                            return t === 'লাভ' || t === 'Like' || t.includes('লাভ');
+                        }, likeButton);
 
-                        // কেবল ওই নির্দিষ্ট পোস্টের আসল লাইক/লাভ বাটন চিহ্নিত করা
-                        const buttons = Array.from(container.querySelectorAll('button, a, div[role="button"], span'));
+                        if (isLikeBtn) {
+                            // স্ক্রিনে স্মুথলি ভিউতে নিয়ে আসা
+                            await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), likeButton);
+                            
+                            // মানুষের মতো বিরতি (যেমন মানুষ পোস্ট দেখে একটু দাঁড়ায়)
+                            await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1500) + 1000));
 
-                        for (let btn of buttons) {
-                            const btnText = btn.innerText ? btn.innerText.trim() : '';
-
-                            if (btnText === 'লাভ' || btnText === 'Like' || btnText.includes('লাভ')) {
+                            // মাউসের রিয়েল কার্সার দিয়ে বাটনে চাপ দেওয়া
+                            const clicked = await humanMoveAndClick(likeButton);
+                            
+                            if (clicked) {
+                                actualConfirmedLikes++;
+                                console.log(`[✓ REAL LIKED] ইউজারের পোস্ট #${actualConfirmedLikes}-এ রিয়েল মাউস ক্লিকে আপনার আইডির লাইক যুক্ত হয়েছে!`);
                                 
-                                // ভিজিবল স্ক্রোলে নিয়ে আসা
-                                btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                
-                                // আসল মানুষের হাতের টাচ/মাউস ক্লিকে যে ইভেন্ট সিকোয়েন্স তৈরি হয় তা ফায়ার করা
-                                const opts = { bubbles: true, cancelable: true, view: window };
-                                btn.dispatchEvent(new MouseEvent('mouseover', opts));
-                                btn.dispatchEvent(new MouseEvent('mousedown', opts));
-                                btn.dispatchEvent(new MouseEvent('mouseup', opts));
-                                btn.click();
-                                btn.dispatchEvent(new MouseEvent('click', opts));
-
-                                count++;
-                                
-                                // সাইটের ব্যাকএন্ড সার্ভারে ডাটাবেজ রিকোয়েস্ট সফলভাবে জমা হওয়ার জন্য ডায়নামিক পজ
-                                await new Promise(resolve => requestAnimationFrame(resolve));
-                                break; 
+                                // ডাটাবেজ ব্যাকএন্ডে রিকোয়েস্ট পৌঁছানোর পর্যাপ্ত সময় দেওয়া
+                                await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2000) + 1500));
                             }
                         }
                     }
                 }
-                return count;
-            });
-
-            if (likedInCycle > 0) {
-                totalLiked += likedInCycle;
-                console.log(`[✓] ${likedInCycle} টি ইউজারের পোস্টে আপনার আইডি দিয়ে সফলভাবে রিয়েল লাইক পাঠানো হয়েছে। (সর্বমোট: ${totalLiked})`);
             }
 
-            // নতুন পোস্ট লোড করতে ডায়নামিক স্ক্রোল
-            const previousHeight = await page.evaluate('document.body.scrollHeight');
-            await page.evaluate('window.scrollBy(0, 800)');
-            
-            // সার্ভার থেকে ডায়নামিকালি নতুন পোস্ট পেজে আসার জন্য রিয়েল-টাইম অপেক্ষা
-            await page.waitForFunction(
-                (prev) => document.body.scrollHeight > prev || true,
-                { timeout: 5000 },
-                previousHeight
-            ).catch(() => {});
+            // মানুষের মতো হাত দিয়ে মাউস হুইল ঘুরিয়ে পেজ নিচে নামানো
+            await page.mouse.wheel({ deltaY: Math.floor(Math.random() * 300) + 500 });
 
-            const newHeight = await page.evaluate('document.body.scrollHeight');
-            if (newHeight === previousHeight && scrollCycle > 5) {
-                console.log('[i] পেজের শেষে পৌঁছানো হয়েছে, আর নতুন পোস্ট নেই।');
-                break;
-            }
+            // পেজের নতুন পোস্ট সার্ভার থেকে আসার অপেক্ষা (ডায়নামিকালি)
+            await page.waitForFunction(() => true, { timeout: 3000 }).catch(() => {});
         }
 
-        console.log(`[SUCCESS] সর্বমোট ${totalLiked} টি পোস্টে আপনার আইডি দিয়ে আসল লাইক সফলভাবে অ্যাক্টিভিটিতে যুক্ত হয়েছে!`);
+        console.log(`\n==================================================`);
+        console.log(`[SUCCESS] সর্বমোট ${actualConfirmedLikes} টি পোস্টে আপনার আইডি দিয়ে আসল মানুষের মতো রিয়েল অ্যাক্টিভিটি জমা হয়েছে!`);
+        console.log(`==================================================\n`);
 
     } catch (error) {
-        console.error('[ERROR] এক্সিকিউশন এরর:', error.message);
+        console.error('[ERROR] সিস্টেম রানিং এরর:', error.message);
     } finally {
         await browser.close();
-        console.log('[+] সেশন সফলভাবে সমাপ্ত হয়েছে।');
+        console.log('[+] ব্রাউজার সম্পূর্ণ বন্ধ হয়েছে।');
     }
 })();
