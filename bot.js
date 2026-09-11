@@ -1,11 +1,9 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
-// বট ডিটেকশন বাইপাস করার জন্য স্টিলথ প্লাগইন যুক্ত করা
 puppeteer.use(StealthPlugin());
 
 (async () => {
-    // GitHub Secrets থেকে সুরক্ষিত ইমেইল ও পাসওয়ার্ড সংগ্রহ
     const EMAIL = process.env.SITE_EMAIL;
     const PASSWORD = process.env.SITE_PASSWORD;
 
@@ -26,15 +24,14 @@ puppeteer.use(StealthPlugin());
 
     const page = await browser.newPage();
 
-    // অ্যাডভান্সড ইউজার এজেন্ট এবং ভিউপোর্ট
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1920, height: 1080 });
 
-    // মানুষের মতো র্যান্ডম বিরতি নেওয়ার হেল্পার ফাংশন
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
     try {
-        console.log('[+] সিকিউর লগইন পেজে ভিজিট করা হচ্ছে...');
+        // ১. লগইন পেজে যাওয়া
+        console.log('[+] লগইন পেজে ভিজিট করা হচ্ছে...');
         await page.goto('https://reebook-meta.com/login.php', {
             waitUntil: 'networkidle2',
             timeout: 60000
@@ -42,22 +39,20 @@ puppeteer.use(StealthPlugin());
 
         await delay(2000);
 
-        // ইমেইল ইনপুট বক্সে টাইপ করা (মানুষের টাইপিং স্পিড অনুকরণ করে)
-        console.log('[+] ইমেইল ইনপুট দেওয়া হচ্ছে...');
+        // ২. লগইন ইনপুট
+        console.log('[+] ইমেইল ও পাসওয়ার্ড দেওয়া হচ্ছে...');
         await page.waitForSelector('input[name="email"]', { visible: true });
-        await page.type('input[name="email"]', EMAIL, { delay: 120 });
+        await page.type('input[name="email"]', EMAIL, { delay: 100 });
 
         await delay(1000);
 
-        // পাসওয়ার্ড ইনপুট দেওয়া
-        console.log('[+] পাসওয়ার্ড ইনপুট দেওয়া হচ্ছে...');
         await page.waitForSelector('input[name="password"]', { visible: true });
-        await page.type('input[name="password"]', PASSWORD, { delay: 140 });
+        await page.type('input[name="password"]', PASSWORD, { delay: 120 });
 
         await delay(1500);
 
-        // লগইন বাটনে সাবমিট করা
-        console.log('[+] লগইন বাটনে ক্লিক করা হচ্ছে...');
+        // ৩. সাবমিট
+        console.log('[+] লগইন সাবমিট করা হচ্ছে...');
         await Promise.all([
             page.click('button[type="submit"]'),
             page.waitForNavigation({ waitUntil: 'networkidle2' }),
@@ -65,7 +60,7 @@ puppeteer.use(StealthPlugin());
 
         console.log('[✓] সফলভাবে লগইন সম্পন্ন হয়েছে!');
 
-        // ড্যাশবোর্ডে রিডাইরেক্ট ও পোস্ট প্রসেসিং
+        // ৪. ড্যাশবোর্ডে রিডাইরেক্ট
         console.log('[+] ড্যাশবোর্ডে যাওয়া হচ্ছে...');
         await page.goto('https://reebook-meta.com/users/dashboard.php', {
             waitUntil: 'networkidle2'
@@ -73,29 +68,47 @@ puppeteer.use(StealthPlugin());
 
         await delay(3000);
 
-        // লাইক বাটনের উপাদান সনাক্তকরণ
-        const likeButtonSelector = '.like-btn'; // আপনার সাইটের আসল লাইক বাটন ক্লাস
-        
-        await page.waitForSelector(likeButtonSelector, { timeout: 15000 }).catch(() => {
-            console.log('[-] কোনো লাইক বাটন পাওয়া যায়নি অথবা ড্যাশবোর্ড লোড হয়নি।');
-        });
+        let likedCount = 0;
+        const processedButtons = new Set();
 
-        const likeButtons = await page.$$(likeButtonSelector);
-        console.log(`[+] মোট ${likeButtons.length} টি লাইক বাটন পাওয়া গেছে।`);
+        console.log('[+] "লাভ" বাটন খোঁজা এবং স্ক্রোল করে অটো-লাইক প্রসেস শুরু হচ্ছে...');
 
-        // প্রতিটি পোস্ট স্মুথলি স্ক্রোল ও র্যান্ডম ইন্টারভালে ক্লিক করা
-        for (let i = 0; i < likeButtons.length; i++) {
-            await likeButtons[i].evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+        for (let scrollAttempt = 0; scrollAttempt < 15; scrollAttempt++) {
+            // স্ক্রিনশটে থাকা "লাভ" লেখাটি সম্বলিত বাটন বা এলিমেন্ট খুঁজে বের করা
+            const elements = await page.$$('div, button, a, span');
             
-            // ১.৫ থেকে ৩.৫ সেকেন্ডের র্যান্ডম ডিলে (বাইপাসের জন্য অত্যন্ত জরুরি)
-            const randomPause = Math.floor(Math.random() * 2000) + 1500;
-            await delay(randomPause);
+            for (let el of elements) {
+                const text = await page.evaluate(element => element.innerText ? element.innerText.trim() : '', el);
 
-            await likeButtons[i].click();
-            console.log(`[✓] পোস্ট #${i + 1} সফলভাবে লাইক করা হয়েছে।`);
+                // যদি লেখার মধ্যে "লাভ" থাকে এবং এটি আগে ক্লিক না হয়ে থাকে
+                if (text === 'লাভ' || text.includes('লাভ')) {
+                    const isProcessed = await el.evaluate(node => node.getAttribute('data-bot-clicked'));
+                    
+                    if (!isProcessed) {
+                        // ফ্ল্যাগ সেট করা যাতে একই বাটনে দুইবার ক্লিক না হয়
+                        await el.evaluate(node => node.setAttribute('data-bot-clicked', 'true'));
+
+                        // স্ক্রোল করে বাটনে যাওয়া
+                        await el.evaluate(node => node.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                        
+                        // হিউম্যান বিহেভিয়ার অনুযায়ী ১.৫ - ৩ সেকেন্ড র্যান্ডম বিরতি
+                        const randomPause = Math.floor(Math.random() * 1500) + 1500;
+                        await delay(randomPause);
+
+                        await el.click();
+                        likedCount++;
+                        console.log(`[✓] পোস্ট #${likedCount} এর "লাভ" বাটনে ক্লিক করা হয়েছে।`);
+                    }
+                }
+            }
+
+            // নতুন পোস্ট লোডের জন্য ফেসবুকে যেভাবে স্ক্রোল করা হয়
+            console.log('[+] আরও পোস্ট লোড করার জন্য স্ক্রোল করা হচ্ছে...');
+            await page.evaluate('window.scrollBy(0, 800)');
+            await delay(3000);
         }
 
-        console.log('[SUCCESS] ড্যাশবোর্ডের সব পোস্টে অটো-লাইক সম্পূর্ণ হয়েছে!');
+        console.log(`[SUCCESS] সর্বমোট ${likedCount} টি পোস্টে সফলভাবে "লাভ" রিঅ্যাক্ট/লাইক দেওয়া হয়েছে!`);
 
     } catch (error) {
         console.error('[ERROR] প্রসেস চলাকালীন সমস্যা:', error.message);
