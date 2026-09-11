@@ -2,8 +2,8 @@ name: Production Auto-Like Engine
 
 on:
   schedule:
-    - cron: '0 */4 * * *' # প্রতি ৪ ঘণ্টা পরপর অটোমেটিক চলবে
-  workflow_dispatch: # ম্যানুয়ালি চাপ দিয়ে চালানোর জন্য
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
 
 jobs:
   automation-runner:
@@ -17,10 +17,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node.js-version: '20'
-          cache: 'npm'
 
       - name: Install Dependencies with Extra Plugins
-        run: npm ci || npm install
+        run: npm install
 
       - name: Run Stealth Automation Engine
         env:
