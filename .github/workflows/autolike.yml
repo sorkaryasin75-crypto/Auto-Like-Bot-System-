@@ -2,8 +2,8 @@ name: Auto Like Automation
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # প্রতি ৬ ঘণ্টা পরপর অটোমেটিক চলবে
-  workflow_dispatch: # যাতে আপনি চাইলে ম্যানুয়ালি বাটন চেপেও টেস্ট করতে পারেন
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   run-like-bot:
@@ -22,4 +22,7 @@ jobs:
         run: npm install puppeteer
 
       - name: Execute Bot
+        env:
+          SITE_USERNAME: ${{ secrets.SITE_USERNAME }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
         run: node bot.js
