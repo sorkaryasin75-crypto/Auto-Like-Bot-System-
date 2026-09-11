@@ -1,28 +1,29 @@
-name: Auto Like Automation
+name: Production Auto-Like Engine
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */4 * * *' # প্রতি ৪ ঘণ্টা পরপর অটোমেটিক চলবে
+  workflow_dispatch: # ম্যানুয়ালি চাপ দিয়ে চালানোর জন্য
 
 jobs:
-  run-like-bot:
+  automation-runner:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
           node.js-version: '20'
+          cache: 'npm'
 
-      - name: Install Puppeteer
-        run: npm install puppeteer
+      - name: Install Dependencies with Extra Plugins
+        run: npm ci || npm install
 
-      - name: Execute Bot
+      - name: Run Stealth Automation Engine
         env:
-          SITE_USERNAME: ${{ secrets.SITE_USERNAME }}
+          SITE_EMAIL: ${{ secrets.SITE_EMAIL }}
           SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
         run: node bot.js
