@@ -13,17 +13,42 @@ const puppeteer = require('puppeteer');
     await page.setUserAgent(customUserAgent);
     await page.setViewport({ width: 1280, height: 800 });
 
+    // GitHub Secrets থেকে নেওয়া মান (অথবা টেস্টের জন্য সরাসরি স্ট্রিং দিতে পারেন)
+    const USERNAME = process.env.SITE_USERNAME || 'YOUR_USERNAME';
+    const PASSWORD = process.env.SITE_PASSWORD || 'YOUR_PASSWORD';
+
     try {
-        console.log('টার্গেট পেজে ভিজিট করা হচ্ছে...');
-        await page.goto('https://reebook-meta.com/users/dashboard.php', {
+        // ১. লগইন পেজে যাওয়া
+        console.log('লগইন পেজে যাওয়া হচ্ছে...');
+        await page.goto('https://reebook-meta.com/login.php', { // আপনার আসল লগইন ইউআরএল দিন
             waitUntil: 'networkidle2',
             timeout: 60000
         });
 
-        // এখানে আপনার সাইটের আসল লাইক বাটনের ক্লাস বা সিলেক্টর দিন
-        const likeButtonSelector = '.like-btn'; 
+        // ২. ইউজারনেম ও পাসওয়ার্ড বক্সে ইনপুট দেওয়া
+        console.log('লগইন তথ্য প্রদান করা হচ্ছে...');
+        await page.waitForSelector('input[name="username"]'); // ইউজারনেম ফিল্ডের ইনপুট নাম/আইডি
+        await page.type('input[name="username"]', USERNAME, { delay: 100 });
 
-        console.log('লাইক বাটন খোঁজা হচ্ছে...');
+        await page.waitForSelector('input[name="password"]'); // পাসওয়ার্ড ফিল্ডের ইনপুট নাম/আইডি
+        await page.type('input[name="password"]', PASSWORD, { delay: 100 });
+
+        // ৩. লগইন বাটনে ক্লিক করা
+        console.log('লগইন বাটনে ক্লিক করা হচ্ছে...');
+        await Promise.all([
+            page.click('button[type="submit"]'), // লগইন বাটনের সিলেক্টর
+            page.waitForNavigation({ waitUntil: 'networkidle2' }),
+        ]);
+
+        console.log('সফলভাবে লগইন করা হয়েছে!');
+
+        // ৪. ড্যাশবোর্ডে গিয়ে লাইক প্রক্রিয়া শুরু
+        console.log('ড্যাশবোর্ডে যাওয়া হচ্ছে...');
+        await page.goto('https://reebook-meta.com/users/dashboard.php', {
+            waitUntil: 'networkidle2'
+        });
+
+        const likeButtonSelector = '.like-btn'; // আপনার ওয়েবসাইটের লাইক বাটনের ক্লাস
         await page.waitForSelector(likeButtonSelector, { timeout: 15000 });
 
         const likeButtons = await page.$$(likeButtonSelector);
@@ -32,7 +57,6 @@ const puppeteer = require('puppeteer');
         for (let i = 0; i < likeButtons.length; i++) {
             await likeButtons[i].evaluate(el => el.scrollIntoView());
             
-            // র্যান্ডম ১ থেকে ২ সেকেন্ড বিরতি (হিউম্যান বিহেভিয়ারের জন্য)
             const randomDelay = Math.floor(Math.random() * 1500) + 1000;
             await new Promise(resolve => setTimeout(resolve, randomDelay));
 
