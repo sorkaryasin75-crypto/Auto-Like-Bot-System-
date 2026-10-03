@@ -3,6 +3,16 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 puppeteer.use(StealthPlugin());
 
+// বাস্তবসম্মত এবং প্রাসঙ্গিক কমেন্ট লিস্ট (প্রয়োজন অনুযায়ী এগুলো আরও বাড়াতে বা পরিবর্তন করতে পারেন)
+const HUMAN_COMMENTS = [
+    "দারুণ পোস্ট! খুবই চমৎকার শেয়ার।",
+    "চমৎকার আইডিয়া, ভালো লাগলো বিষয়টি।",
+    "খুব সুন্দর ও তথ্যবহুল একটি পোস্ট।",
+    "দারুণ লাগলো ভাই, শুভকামনা রইল।",
+    "খুব সুন্দর লিখেছেন, চালিয়ে যান!",
+    "বাহ! দারুণ একটি মুহূর্ত বা বিষয়।"
+];
+
 (async () => {
     const EMAIL = process.env.SITE_EMAIL;
     const PASSWORD = process.env.SITE_PASSWORD;
@@ -53,24 +63,24 @@ puppeteer.use(StealthPlugin());
         return true;
     }
 
+    // মানুষের মতো ক্যারেক্টার বাই ক্যারেক্টার টাইপ করার ফাংশন
+    async function humanType(targetElement, text) {
+        await humanMoveAndClick(targetElement);
+        for (let char of text) {
+            await page.keyboard.type(char, { delay: Math.floor(Math.random() * 100) + 50 });
+        }
+    }
+
     try {
         console.log('[+] লগইন পেজে যাওয়া হচ্ছে...');
         await page.goto('https://reebook-meta.com/login.php', { waitUntil: 'domcontentloaded' });
 
         // ১. ডায়নামিকালি ইমেইল ফিল্ড রেডি হওয়ার জন্য অপেক্ষা
         const emailField = await page.waitForSelector('input[name="email"]', { visible: true });
-        await humanMoveAndClick(emailField);
-        
-        // টাইপিং স্পিড মানুষের মতো (এলোমেলো লেটেন্সি সহ)
-        for (let char of EMAIL) {
-            await page.keyboard.type(char, { delay: Math.floor(Math.random() * 80) + 40 });
-        }
+        await humanType(emailField, EMAIL);
 
         const passField = await page.waitForSelector('input[name="password"]', { visible: true });
-        await humanMoveAndClick(passField);
-        for (let char of PASSWORD) {
-            await page.keyboard.type(char, { delay: Math.floor(Math.random() * 80) + 40 });
-        }
+        await humanType(passField, PASSWORD);
 
         console.log('[+] লগইন সাবমিট বাটন প্রেস করা হচ্ছে...');
         const submitBtn = await page.waitForSelector('button[type="submit"]', { visible: true });
@@ -87,9 +97,9 @@ puppeteer.use(StealthPlugin());
         await page.goto('https://reebook-meta.com/users/dashboard.php', { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('body', { visible: true });
 
-        let actualConfirmedLikes = 0;
+        let actualConfirmedActions = 0;
 
-        // ৩. ফিড স্ক্রোল এবং পোস্ট বাই পোস্ট হিউম্যান ইন্টারঅ্যাকশন
+        // ৩. ফিড স্ক্রোল এবং পোস্ট বাই পোস্ট হিউম্যান লাইক ও কমেন্ট ইন্টারঅ্যাকশন
         for (let scrollCycle = 0; scrollCycle < 15; scrollCycle++) {
             
             // পোস্ট নির্বাচন করা
@@ -105,7 +115,7 @@ puppeteer.use(StealthPlugin());
                 if (isPost) {
                     await page.evaluate(el => el.setAttribute('data-human-processed', 'true'), container);
 
-                    // পোস্টটির লাইক বাটন চিহ্নিত করা
+                    // ক. পোস্টটির লাইক বাটন চিহ্নিত করা ও লাইক দেওয়া
                     const likeButton = await container.$('button, a, div[role="button"]');
                     
                     if (likeButton) {
@@ -118,20 +128,43 @@ puppeteer.use(StealthPlugin());
                             // স্ক্রিনে স্মুথলি ভিউতে নিয়ে আসা
                             await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), likeButton);
                             
-                            // মানুষের মতো বিরতি (যেমন মানুষ পোস্ট দেখে একটু দাঁড়ায়)
+                            // মানুষের মতো বিরতি
                             await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1500) + 1000));
 
-                            // মাউসের রিয়েল কার্সার দিয়ে বাটনে চাপ দেওয়া
-                            const clicked = await humanMoveAndClick(likeButton);
+                            // মাউসের রিয়েল কার্সার দিয়ে লাইক বাটনে চাপ দেওয়া
+                            const clickedLike = await humanMoveAndClick(likeButton);
                             
-                            if (clicked) {
-                                actualConfirmedLikes++;
-                                console.log(`[✓ REAL LIKED] ইউজারের পোস্ট #${actualConfirmedLikes}-এ রিয়েল মাউস ক্লিকে আপনার আইডির লাইক যুক্ত হয়েছে!`);
-                                
-                                // ডাটাবেজ ব্যাকএন্ডে রিকোয়েস্ট পৌঁছানোর পর্যাপ্ত সময় দেওয়া
-                                await new Promise(r => setTimeout(r, Math.floor(Math.random() * 2000) + 1500));
+                            if (clickedLike) {
+                                console.log(`[✓ REAL LIKED] পোস্টটিতে রিয়েল মাউস ক্লিকে লাইক যুক্ত হয়েছে!`);
+                                await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1500) + 1000));
                             }
                         }
+                    }
+
+                    // খ. নতুন ফিচার: একই পোস্টে হিউম্যান টাইপিং স্টাইলে কমেন্ট করা
+                    const commentInputBox = await container.$('input[type="text"], textarea, div[contenteditable="true"]');
+                    
+                    if (commentInputBox) {
+                        // রেন্ডমলি লিস্ট থেকে একটি কমেন্ট সিলেক্ট করা
+                        const randomComment = HUMAN_COMMENTS[Math.floor(Math.random() * HUMAN_COMMENTS.length)];
+
+                        // কমেন্ট বক্স ভিউতে নিয়ে আসা
+                        await page.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), commentInputBox);
+                        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1000) + 500));
+
+                        // মানুষের মতো টাইপ করে কমেন্ট ইনপুট বক্সে লেখা
+                        await humanType(commentInputBox, randomComment);
+                        console.log(`[✍️ HUMAN TYPING] কমেন্ট টাইপ করা হয়েছে: "${randomComment}"`);
+
+                        // কমেন্ট সাবমিট বাটন বা এন্টার প্রেস করার লজিক
+                        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1000) + 500));
+                        await page.keyboard.press('Enter');
+
+                        actualConfirmedActions++;
+                        console.log(`[✓ REAL COMMENTED] পোস্ট #${actualConfirmedActions}-এ সফলভাবে কমেন্ট পোস্ট করা হয়েছে!`);
+
+                        // ডাটাবেজ ব্যাকএন্ডে রিকোয়েস্ট পৌঁছানোর পর্যাপ্ত সময় দেওয়া
+                        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3000) + 2000));
                     }
                 }
             }
@@ -144,7 +177,7 @@ puppeteer.use(StealthPlugin());
         }
 
         console.log(`\n==================================================`);
-        console.log(`[SUCCESS] সর্বমোট ${actualConfirmedLikes} টি পোস্টে আপনার আইডি দিয়ে আসল মানুষের মতো রিয়েল অ্যাক্টিভিটি জমা হয়েছে!`);
+        console.log(`[SUCCESS] সর্বমোট ${actualConfirmedActions} টি পোস্টে লাইক ও হিউম্যান কমেন্টের রিয়েল অ্যাক্টিভিটি সম্পন্ন হয়েছে!`);
         console.log(`==================================================\n`);
 
     } catch (error) {
